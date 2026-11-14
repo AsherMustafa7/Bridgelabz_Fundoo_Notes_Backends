@@ -11,6 +11,8 @@ import com.fundoo.notes.service.PasswordService;
 import com.fundoo.notes.service.TokenService;
 import com.fundoo.notes.service.UserService;
 import org.springframework.stereotype.Service;
+import com.fundoo.notes.exception.DuplicateEmailException;
+import com.fundoo.notes.exception.InvalidCredentialsException;
 
 /*
  * Class Name  : UserServiceImpl
@@ -43,7 +45,7 @@ public class UserServiceImpl implements UserService {
 
         // [Asher Mustafa]: Prevent registration with an already registered email.
         if (userRepository.findByEmail(requestDto.getEmail()).isPresent()) {
-            throw new IllegalArgumentException("Email already registered");
+            throw new DuplicateEmailException("Email is already registered");
         }
 
         User user = new User();
@@ -71,7 +73,7 @@ public class UserServiceImpl implements UserService {
         // [Asher Mustafa]: Find the account using the submitted email.
         User user = userRepository.findByEmail(requestDto.getEmail())
                 .orElseThrow(() ->
-                        new IllegalArgumentException("Invalid email or password"));
+                        new InvalidCredentialsException("Invalid email or password"));
 
         // [Asher Mustafa]: Compare submitted password against the stored BCrypt hash.
         boolean passwordMatches = passwordService.matchesPassword(
@@ -79,8 +81,9 @@ public class UserServiceImpl implements UserService {
                 user.getPassword()
         );
 
+        // [Asher Mustafa]: Throw custom exception if password does not match.
         if (!passwordMatches) {
-            throw new IllegalArgumentException("Invalid email or password");
+            throw new InvalidCredentialsException("Invalid email or password");
         }
 
         // [Asher Mustafa]: Generate a token using the user's email as its subject.
@@ -89,3 +92,4 @@ public class UserServiceImpl implements UserService {
         return new LoginResponseDto(token, "Login successful");
     }
 }
+
