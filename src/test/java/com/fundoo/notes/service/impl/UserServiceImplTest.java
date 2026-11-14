@@ -1,14 +1,16 @@
 
 package com.fundoo.notes.service.impl;
 
+import com.fundoo.notes.dto.request.LoginRequestDto;
 import com.fundoo.notes.dto.request.UserRegisterRequestDto;
+import com.fundoo.notes.dto.response.LoginResponseDto;
 import com.fundoo.notes.dto.response.UserResponseDto;
 import com.fundoo.notes.entity.User;
 import com.fundoo.notes.repository.UserRepository;
-
+import com.fundoo.notes.service.PasswordService;
+import com.fundoo.notes.service.TokenService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,63 +22,69 @@ import static org.mockito.Mockito.*;
 
 /*
  * Class Name  : UserServiceImplTest
- * Description : Unit tests for user registration business logic,
- *               including successful registration and duplicate email.
+ * Description : Tests registration and login business logic,
+ *               including password encoding and token generation.
  * Author      : Asher Mustafa
  * @author Asher
  * Date        : 14/11/2026
  */
-
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private PasswordService passwordService;
+
+    @Mock
+    private TokenService tokenService;
+
     @InjectMocks
     private UserServiceImpl userService;
 
-    // [Asher Mustafa]: Verifies that a new user can be registered successfully.
     @Test
-    void shouldRegisterUserSuccessfully() {
+    void shouldRegisterUserWithEncodedPassword() {
 
         UserRegisterRequestDto request = new UserRegisterRequestDto();
         request.setFirstName("Asher");
         request.setEmail("asher@example.com");
         request.setPassword("Password123");
 
-        when(userRepository.findByEmail("asher@example.com"))
+        when(userRepository.findByEmail(request.getEmail()))
                 .thenReturn(Optional.empty());
 
-        User savedUser = new User(
-                "Asher",
-                "asher@example.com",
-                "Password123"
-        );
-        savedUser.setId(1L);
+        when(passwordService.encodePassword("Password123"))
+                .thenReturn("$2a$10$encodedPasswordHash");
 
-        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        User savedUser = new User();
+        savedUser.setId(1L);
+        savedUser.setFirstName("Asher");
+        savedUser.setEmail("asher@example.com");
+        savedUser.setPassword("$2a$10$encodedPasswordHash");
+
+        when(userRepository.save(any(User.class)))
+                .thenReturn(savedUser);
 
         UserResponseDto response = userService.register(request);
 
-        assertNotNull(response);
         assertEquals(1L, response.getId());
         assertEquals("Asher", response.getFirstName());
         assertEquals("asher@example.com", response.getEmail());
 
+        verify(passwordService).encodePassword("Password123");
         verify(userRepository).save(any(User.class));
     }
 
-    // [Asher Mustafa]: Verifies that duplicate email registration is rejected.
     @Test
     void shouldRejectDuplicateEmail() {
 
         UserRegisterRequestDto request = new UserRegisterRequestDto();
         request.setFirstName("Asher");
-        request.setEmail("existing@example.com");
+        request.setEmail("asher@example.com");
         request.setPassword("Password123");
 
-        when(userRepository.findByEmail("existing@example.com"))
+        when(userRepository.findByEmail(request.getEmail()))
                 .thenReturn(Optional.of(new User()));
 
         assertThrows(
@@ -84,32 +92,89 @@ class UserServiceImplTest {
                 () -> userService.register(request)
         );
 
+        verify(passwordService, never()).encodePassword(anyString());
         verify(userRepository, never()).save(any(User.class));
     }
 
-    // [Asher Mustafa]: Verifies that the repository is checked using the submitted email.
     @Test
-    void shouldCheckEmailBeforeSavingUser() {
+    void shouldLoginSuccessfullyWithCorrectPassword() {
 
-        UserRegisterRequestDto request = new UserRegisterRequestDto();
-        request.setFirstName("Test");
-        request.setEmail("test@example.com");
+        LoginRequestDto request = new LoginRequestDto();
+        request.setEmail("asher@example.com");
         request.setPassword("Password123");
 
-        when(userRepository.findByEmail("test@example.com"))
+        User user = new User();
+        user.setId(1L);
+        user.setFirstName("Asher");
+        user.setEmail("asher@example.com");
+        user.setPassword("$2a$10$encodedPasswordHash");
+
+        when(userRepository.findByEmail(request.getEmail()))
+                .thenReturn(Optional.of(user));
+
+        when(passwordService.matchesPassword(
+                "Password123", "$2a$10$encodedPasswordHash"))
+                .thenReturn(true);
+
+        when(tokenService.generateToken("asher@example.com"))
+                .thenReturn("sample.jwt.token");
+
+        LoginResponseDto response = userService.login(request);
+
+        assertEquals("sample.jwt.token", response.getToken());
+        assertEquals("Login successful", response.getMessage());
+
+        verify(passwordService).matchesPassword(
+                "Password123", "$2a$10$encodedPasswordHash"
+        );
+
+        verify(tokenService).generateToken("asher@example.com");
+    }
+
+    @Test
+    void shouldRejectLoginForUnknownEmail() {
+
+        LoginRequestDto request = new LoginRequestDto();
+        request.setEmail("unknown@example.com");
+        request.setPassword("Password123");
+
+        when(userRepository.findByEmail(request.getEmail()))
                 .thenReturn(Optional.empty());
 
-        User savedUser = new User(
-                "Test",
-                "test@example.com",
-                "Password123"
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> userService.login(request)
         );
-        savedUser.setId(2L);
 
-        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        verify(passwordService, never())
+                .matchesPassword(anyString(), anyString());
 
-        userService.register(request);
+        verify(tokenService, never()).generateToken(anyString());
+    }
 
-        verify(userRepository).findByEmail("test@example.com");
+    @Test
+    void shouldRejectLoginForIncorrectPassword() {
+
+        LoginRequestDto request = new LoginRequestDto();
+        request.setEmail("asher@example.com");
+        request.setPassword("WrongPassword");
+
+        User user = new User();
+        user.setEmail("asher@example.com");
+        user.setPassword("$2a$10$encodedPasswordHash");
+
+        when(userRepository.findByEmail(request.getEmail()))
+                .thenReturn(Optional.of(user));
+
+        when(passwordService.matchesPassword(
+                "WrongPassword", "$2a$10$encodedPasswordHash"))
+                .thenReturn(false);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> userService.login(request)
+        );
+
+        verify(tokenService, never()).generateToken(anyString());
     }
 }
