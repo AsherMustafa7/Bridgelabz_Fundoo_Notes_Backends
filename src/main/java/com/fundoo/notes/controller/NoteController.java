@@ -15,11 +15,11 @@ import java.util.List;
 
 /*
  * Class Name  : NoteController
- * Description : Exposes REST endpoints for creating
- *               and retrieving user notes.
+ * Description : Exposes REST endpoints for creating,
+ *               retrieving and updating user notes.
  * Author      : Asher Mustafa
  * @author Asher
- * Date        : 14/11/2026
+ * Date        : 16/11/2026
  */
 
 @RestController
@@ -50,6 +50,39 @@ public class NoteController {
             @RequestHeader("Authorization") String token) {
 
         List<NoteResponseDto> response = noteService.getAllNotes(token);
+
+        return ResponseEntity.ok(response);
+    }
+
+    // [Asher Mustafa]: Toggles the pin status of a note.
+    @PatchMapping("/{noteId}/pin")
+    public ResponseEntity<NoteResponseDto> togglePin(
+            @PathVariable("noteId") Long noteId,
+            @RequestHeader("Authorization") String token) {
+
+        NoteResponseDto response = noteService.togglePin(noteId, token);
+
+        return ResponseEntity.ok(response);
+    }
+
+    // [Asher Mustafa]: Toggles the archive status of a note.
+    @PatchMapping("/{noteId}/archive")
+    public ResponseEntity<NoteResponseDto> toggleArchive(
+            @PathVariable("noteId") Long noteId,
+            @RequestHeader("Authorization") String token) {
+
+        NoteResponseDto response = noteService.toggleArchive(noteId, token);
+
+        return ResponseEntity.ok(response);
+    }
+
+    // [Asher Mustafa]: Toggles the trash status of a note.
+    @PatchMapping("/{noteId}/trash")
+    public ResponseEntity<NoteResponseDto> toggleTrash(
+            @PathVariable("noteId") Long noteId,
+            @RequestHeader("Authorization") String token) {
+
+        NoteResponseDto response = noteService.toggleTrash(noteId, token);
 
         return ResponseEntity.ok(response);
     }

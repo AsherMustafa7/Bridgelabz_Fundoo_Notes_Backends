@@ -6,6 +6,7 @@ import com.fundoo.notes.dto.response.NoteResponseDto;
 import com.fundoo.notes.entity.Note;
 import com.fundoo.notes.entity.User;
 import com.fundoo.notes.exception.InvalidCredentialsException;
+import com.fundoo.notes.exception.NoteNotFoundException;
 import com.fundoo.notes.repository.NoteRepository;
 import com.fundoo.notes.repository.UserRepository;
 import com.fundoo.notes.service.NoteService;
@@ -18,11 +19,11 @@ import java.util.List;
 
 /*
  * Class Name  : NoteServiceImpl
- * Description : Implements note creation and retrieval
- *               operations using repositories and JWT.
+ * Description : Implements note creation, retrieval and
+ *               state update operations using JWT.
  * Author      : Asher Mustafa
  * @author Asher
- * Date        : 14/11/2026
+ * Date        : 16/11/2026
  */
 
 @Service
@@ -80,11 +81,71 @@ public class NoteServiceImpl implements NoteService {
                 .toList();
     }
 
+    @Override
+    @Transactional
+    public NoteResponseDto togglePin(Long noteId, String token) {
+
+        // [Asher Mustafa]: Find the authenticated user's note.
+        Note note = findNoteForUser(noteId, token);
+
+        // [Asher Mustafa]: Reverse the current pin state.
+        note.setPinned(!note.isPinned());
+
+        return mapToResponse(noteRepository.save(note));
+    }
+
+    @Override
+    @Transactional
+    public NoteResponseDto toggleArchive(Long noteId, String token) {
+
+        // [Asher Mustafa]: Find the authenticated user's note.
+        Note note = findNoteForUser(noteId, token);
+
+        // [Asher Mustafa]: Reverse the current archive state.
+        note.setArchived(!note.isArchived());
+
+        return mapToResponse(noteRepository.save(note));
+    }
+
+    @Override
+    @Transactional
+    public NoteResponseDto toggleTrash(Long noteId, String token) {
+
+        // [Asher Mustafa]: Find the authenticated user's note.
+        Note note = findNoteForUser(noteId, token);
+
+        // [Asher Mustafa]: Reverse the current trash state.
+        note.setTrashed(!note.isTrashed());
+
+        return mapToResponse(noteRepository.save(note));
+    }
+
+    /*
+     * Finds a note only when it belongs to the authenticated user.
+     * A missing note and another user's note both return not found.
+     */
+    private Note findNoteForUser(Long noteId, String token) {
+
+        User user = findUserFromToken(token);
+
+        Note note = noteRepository.findById(noteId)
+                .orElseThrow(() ->
+                        new NoteNotFoundException("Note not found"));
+
+        // [Asher Mustafa]: Prevent users from modifying notes owned by others.
+        if (!note.getUser().getId().equals(user.getId())) {
+            throw new NoteNotFoundException("Note not found");
+        }
+
+        return note;
+    }
+
     // [Asher Mustafa]: Validates the JWT and retrieves its corresponding user.
     private User findUserFromToken(String token) {
 
         if (token == null || token.isBlank()) {
-            throw new InvalidCredentialsException("Authorization token is required");
+            throw new InvalidCredentialsException(
+                    "Authorization token is required");
         }
 
         // [Asher Mustafa]: Remove Bearer prefix when supplied by the client.
@@ -93,7 +154,8 @@ public class NoteServiceImpl implements NoteService {
                 : token.trim();
 
         if (!tokenService.isTokenValid(jwt)) {
-            throw new InvalidCredentialsException("Invalid or expired token");
+            throw new InvalidCredentialsException(
+                    "Invalid or expired token");
         }
 
         // [Asher Mustafa]: JWT subject contains the user's email.
@@ -101,7 +163,8 @@ public class NoteServiceImpl implements NoteService {
 
         return userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new InvalidCredentialsException("User associated with token not found"));
+                        new InvalidCredentialsException(
+                                "User associated with token not found"));
     }
 
     // [Asher Mustafa]: Maps the Note entity to an API response DTO.
