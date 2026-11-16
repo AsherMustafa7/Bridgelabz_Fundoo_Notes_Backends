@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import com.fundoo.notes.exception.NoteNotFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -42,7 +43,26 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
+    /*
+     * Handles requests for notes that do not exist
+     * or do not belong to the authenticated user.
+     */
+    @ExceptionHandler(NoteNotFoundException.class)
+    public ResponseEntity<ApiErrorResponseDto> handleNoteNotFound(
+            NoteNotFoundException exception,
+            HttpServletRequest request) {
 
+        ApiErrorResponseDto response = new ApiErrorResponseDto(
+                LocalDateTime.now(),
+                HttpStatus.NOT_FOUND.value(),
+                HttpStatus.NOT_FOUND.getReasonPhrase(),
+                exception.getMessage(),
+                request.getRequestURI(),
+                null
+        );
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
     // [Asher Mustafa]: Handles invalid login credentials.
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponseDto> handleInvalidCredentials(
